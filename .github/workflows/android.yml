@@ -1,0 +1,47 @@
+name: Android CI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      ###Gradle Build###
+      - uses: actions/setup-java@v3
+        with:
+          distribution: oracle
+          java-version: 17
+      - name: Android Gradle Build
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: current
+          arguments: assembleRelease
+      ###Android Sign###
+      - name: Android Sign
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "33.0.2"
+      - name: Rename APK
+        run: mv ${{steps.sign_app.outputs.signedReleaseFile}} 2048_$GITHUB_REF_NAME.apk
+      ###publish###
+      - name: Action Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          draft: false
+          prerelease: false
+          files:
+            "*.apk"
